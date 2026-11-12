@@ -85,6 +85,7 @@ The homogeneous solutions are parabolic cylinder functions $G_\pm$, and the part
 | `DERIVATION.md` | The derivation of the additive OU switching model and the numerical method |
 | `examples/` | Synthetic data for the two use cases |
 | `media/` | Walkthrough GIFs |
+| `LICENSE.md` | NYU non-commercial research license |
 
 ## Citation
 
@@ -108,3 +109,7 @@ Other references:
 
 - Dixit, A. (1989). Entry and exit decisions under uncertainty. *Journal of Political Economy*, 97(3), 620–638.
 - Dixit, A., & Pindyck, R. (1994). *Investment under Uncertainty*. Princeton University Press.
+
+## License
+
+TOGGLE is released under the NYU Non-Commercial Research License (see [LICENSE.md](LICENSE.md)). It may be used and copied for internal non-commercial research and evaluation only. For commercial licensing, or for rights to modify or redistribute, contact the NYU Office of Industrial Liaison.
