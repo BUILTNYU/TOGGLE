@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TOGGLE · Optimal mode switching</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+:root{
+  --bg:#f6f6f3; --surface:#fcfcfb; --surface2:#efeee9; --border:#dcdbd5; --ink:#0b0b0b; --ink2:#52514e; --muted:#8a8984;
+  --s0:#2a78d6; --s1:#eb6834; --s2:#1baf7a; --s3:#6250d6; --bad:#c4312f; --good:#1f7a3f; --warn:#9a6700;
+  --tint0:rgba(42,120,214,.10); --tint1:rgba(235,104,52,.12); --grid:#e4e3de;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121211; --surface:#1a1a19; --surface2:#252523; --border:#33332f; --ink:#f0efec; --ink2:#c3c2b7; --muted:#8f8e86;
+  --s0:#3987e5; --s1:#d95926; --s2:#199e70; --s3:#9085e9; --bad:#e66767; --good:#4cc07a; --warn:#e0a526;
+  --tint0:rgba(57,135,229,.16); --tint1:rgba(217,89,38,.18); --grid:#2b2b28; } }
+:root[data-theme="dark"]{
+  --bg:#121211; --surface:#1a1a19; --surface2:#252523; --border:#33332f; --ink:#f0efec; --ink2:#c3c2b7; --muted:#8f8e86;
+  --s0:#3987e5; --s1:#d95926; --s2:#199e70; --s3:#9085e9; --bad:#e66767; --good:#4cc07a; --warn:#e0a526;
+  --tint0:rgba(57,135,229,.16); --tint1:rgba(217,89,38,.18); --grid:#2b2b28; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:20px 16px 8px;max-width:1180px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px;font-weight:650}
+.sub{color:var(--ink2);margin:0}
+nav{max-width:1180px;margin:10px auto 0;padding:0 16px;display:flex;gap:4px;border-bottom:1px solid var(--border)}
+nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--ink2);padding:8px 12px;font:inherit;cursor:pointer}
+nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--s0);font-weight:600}
+main{max-width:1180px;margin:0 auto;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;min-width:0}
+.card h2{font-size:16px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.step{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--surface2);font-size:12px;color:var(--ink2)}
+label{display:block;font-size:13px;color:var(--ink2);margin:8px 0 3px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{font-family:var(--mono);font-size:13px;min-height:44px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}
+button.btn{border:1px solid var(--border);background:var(--surface2);color:var(--ink);padding:7px 12px;border-radius:7px;font:inherit;cursor:pointer}
+button.btn:hover{border-color:var(--muted)}
+button.primary{background:var(--s0);border-color:var(--s0);color:#fff;font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--ink2);padding:6px 12px;font:inherit;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface2);color:var(--ink);font-weight:600}
+.muted{color:var(--muted)}.small{font-size:13px}
+.msg{font-size:13px;padding:8px 10px;border-radius:7px;margin-top:8px;background:var(--surface2);color:var(--ink2)}
+.msg.err{color:var(--bad)}.msg.warn{color:var(--warn)}.msg.ok{color:var(--good)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--surface2);border-radius:9px;padding:10px 12px}
+.kpi .v{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12.5px;color:var(--ink2)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+.chart{width:100%;position:relative}
+.chart svg{width:100%;height:auto;display:block}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap;display:none;z-index:2}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px;color:var(--ink2);margin:4px 0 2px}
+.legend i{display:inline-block;width:16px;height:0;border-top:2px solid;margin-right:5px;vertical-align:middle}
+.rec{border-left:4px solid var(--s0);padding:10px 12px;background:var(--surface2);border-radius:0 8px 8px 0;margin-top:12px}
+.hidden{display:none}
+.method{max-width:860px}
+.method h3{margin-top:26px}
+.method p,.method li{color:var(--ink)}
+code{font-family:var(--mono);font-size:13px;background:var(--surface2);padding:1px 4px;border-radius:4px}
+a{color:var(--s0)}
+@media (max-width:520px){ .kpi .v{font-size:20px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>TOGGLE <span style="font-weight:400;color:var(--muted)">· optimal mode switching</span></h1>
+  <p class="sub">Estimate a mean-reverting (Ornstein–Uhlenbeck) demand process from data and compute the optimal demand thresholds for switching between two operating modes when each switch has a cost.</p>
+</header>
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-tab="app">App</button>
+  <button role="tab" aria-selected="false" data-tab="method">Method</button>
+  <span style="flex:1"></span>
+  <button id="themeBtn" class="btn" style="margin:4px 0;padding:4px 10px" title="Switch between light and dark">Light / dark</button>
+</nav>
+
+<main id="tab-app">
+  <div class="grid">
+    <!-- 1. demand -->
+    <section class="card">
+      <h2><span class="step">1</span>Demand data</h2>
+      <p class="small muted" style="margin:0">CSV with one row per observation: a time column (numbers or date-times) and a demand column. Without a time column, observations are taken as equally spaced.</p>
+      <div class="row" style="margin-top:8px;align-items:center">
+        <input type="file" id="demFile" accept=".csv,text/csv,.txt" style="min-width:200px">
+        <button class="btn" id="demExample" style="flex:0 0 auto">Load example</button>
+      </div>
+      <div id="demCols" class="hidden">
+        <div class="row">
+          <div><label for="timeCol">Time column</label><select id="timeCol"></select></div>
+          <div><label for="demCol">Demand column</label><select id="demCol"></select></div>
+        </div>
+        <div class="row">
+          <div id="unitWrap"><label for="timeUnit">Time unit for the model</label>
+            <select id="timeUnit"><option value="1">hours</option><option value="0.0166666667">minutes</option><option value="24">days</option><option value="168">weeks</option></select></div>
+          <div id="dtWrap" class="hidden"><label for="dtIn">Spacing between rows (time units)</label><input type="number" id="dtIn" value="1" step="any" min="0"></div>
+        </div>
+        <p class="small muted" id="unitNote" style="margin:6px 0 0"></p>
+      </div>
+      <div id="demSummary"></div>
+      <div class="chart" id="chDemSmall"></div>
+    </section>
+
+    <!-- 2. OU estimates -->
+    <section class="card">
+      <h2><span class="step">2</span>OU process</h2>
+      <p class="small muted" style="margin:0">dQ = μ(m − Q) dt + σ dW, fitted by exact maximum likelihood. You can overwrite the values before computing.</p>
+      <div id="estTable" class="small muted" style="margin-top:8px">Load demand data to estimate the parameters.</div>
+      <div class="row">
+        <div><label for="pMu">μ (reversion speed, 1/time)</label><input type="number" id="pMu" step="any"></div>
+        <div><label for="pM">m (long-run mean)</label><input type="number" id="pM" step="any"></div>
+        <div><label for="pSig">σ (volatility, demand/√time)</label><input type="number" id="pSig" step="any"></div>
+      </div>
+      <div id="estWarn"></div>
+    </section>
+
+    <!-- 3. payoff -->
+    <section class="card">
+      <h2><span class="step">3</span>Payoff of mode 1 over mode 0</h2>
+      <div class="row">
+        <div><label for="name0">Mode 0 name</label><input type="text" id="name0" value="Flexible"></div>
+        <div><label for="name1">Mode 1 name</label><input type="text" id="name1" value="Fixed route"></div>
+      </div>
+      <div style="margin:10px 0 2px" class="seg" role="group" aria-label="Payoff input">
+        <button id="phiModeF" aria-pressed="true">Formula</button><button id="phiModeC" aria-pressed="false">Cost table (CSV)</button>
+      </div>
+      <div id="phiFormulaBox">
+        <label for="phiF">Φ(Q) = cost of mode 0 − cost of mode 1, per time unit (a positive value means mode 1 is cheaper)</label>
+        <textarea id="phiF" spellcheck="false">12*(Q - 32)</textarea>
+        <p class="small muted" style="margin:4px 0 0">Use <code>Q</code>, + − * / ^, and functions such as <code>sqrt exp log pow min max abs pos</code>. Example: <code>3*Q^0.9*15 - 25*Q - 600</code>.</p>
+      </div>
+      <div id="phiCostBox" class="hidden">
+        <label>CSV with a demand level column and one cost column per mode (cost per time unit)</label>
+        <div class="row" style="align-items:center"><input type="file" id="costFile" accept=".csv,text/csv,.txt" style="min-width:200px"><button class="btn" id="costExample" style="flex:0 0 auto">Load example</button></div>
+        <div id="costCols" class="hidden">
+          <div class="row">
+            <div><label for="cQ">Demand level</label><select id="cQ"></select></div>
+            <div><label for="c0">Cost of mode 0</label><select id="c0"></select></div>
+            <div><label for="c1">Cost of mode 1</label><select id="c1"></select></div>
+          </div>
+          <div class="row"><div><label for="interp">Interpolation</label><select id="interp"><option value="pchip">Monotone cubic (PCHIP)</option><option value="linear">Linear</option></select></div><div></div></div>
+          <p class="small muted" style="margin:6px 0 0">Outside the table, Φ is extended linearly using the end slopes.</p>
+        </div>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink2);margin-top:10px"><input type="checkbox" id="clip0" checked> Evaluate Φ at max(Q, 0) (an OU process can dip below zero)</label>
+      <div class="chart" id="chPhiSmall"></div>
+      <div id="phiMsg"></div>
+    </section>
+
+    <!-- 4. costs -->
+    <section class="card">
+      <h2><span class="step">4</span>Switching costs and discounting</h2>
+      <div class="row">
+        <div><label for="Fp">F⁺: cost to switch mode 0 → mode 1</label><input type="number" id="Fp" value="10" step="any" min="0"></div>
+        <div><label for="Fm">F⁻: cost to switch mode 1 → mode 0</label><input type="number" id="Fm" value="10" step="any" min="0"></div>
+      </div>
+      <div class="row">
+        <div><label for="rho">ρ: discount rate per time unit</label><input type="number" id="rho" value="0.07" step="any" min="0"></div>
+        <div><label for="mode0">Mode at the start of the data</label><select id="mode0"><option value="0">Mode 0</option><option value="1">Mode 1</option></select></div>
+      </div>
+      <div class="row">
+        <div><label for="modeNow">Current mode (for the recommendation)</label><select id="modeNow"><option value="0">Mode 0</option><option value="1">Mode 1</option></select></div>
+        <div></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn primary" id="runBtn">Compute thresholds</button>
+        <span id="runMsg" class="small muted"></span>
+      </div>
+    </section>
+  </div>
+
+  <!-- results -->
+  <section class="card hidden" id="results" style="margin-top:16px">
+    <h2>Optimal switching policy</h2>
+    <div class="kpis" id="kpis"></div>
+    <div class="rec" id="rec"></div>
+    <div id="notes"></div>
+    <div class="grid" style="margin-top:14px">
+      <div><h3 class="small" style="margin:4px 0">Demand data with the switching policy applied</h3><div class="legend" id="lgDem"></div><div class="chart" id="chDem"></div></div>
+      <div><h3 class="small" style="margin:4px 0">Payoff Φ(Q) and thresholds</h3><div class="legend" id="lgPhi"></div><div class="chart" id="chPhi"></div></div>
+      <div><h3 class="small" style="margin:4px 0">Value of being in mode 1 rather than mode 0</h3><div class="legend" id="lgV"></div><div class="chart" id="chV"></div></div>
+      <div><h3 class="small" style="margin:4px 0">Long-run distribution of demand</h3><div class="legend" id="lgD"></div><div class="chart" id="chDens"></div></div>
+    </div>
+    <h3 class="small" style="margin:18px 0 6px">The policy applied to your data (undiscounted totals)</h3>
+    <div style="overflow-x:auto"><table id="btTable"></table></div>
+    <p class="small muted">Payoff = Σ Φ(Q)·Δt over periods spent in mode 1, measured against staying in mode 0. The "myopic" policy switches whenever Φ changes sign, ignoring switching costs. A single sample path is only illustrative.</p>
+    <h3 class="small" style="margin:18px 0 6px">Expected performance on simulated demand (discounted)</h3>
+    <div style="overflow-x:auto"><table id="mcTable"><tbody><tr><td class="muted">Simulating…</td></tr></tbody></table></div>
+    <p class="small muted" id="mcNote"></p>
+    <h3 class="small" style="margin:14px 0 6px">Checks</h3>
+    <div id="checks" class="small"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="dlJson">Download results (JSON)</button>
+      <button class="btn" id="dlPolicy">Download policy on data (CSV)</button>
+    </div>
+  </section>
+</main>
+
+<main id="tab-method" class="hidden"><div class="card method">
+<h2 style="font-size:20px">Method: optimal switching under an additive Ornstein–Uhlenbeck process</h2>
+<p>This is the entry–exit ("market switching") model of Dixit (1989), solved for demand that follows an additive Ornstein–Uhlenbeck process. It corrects the derivation in Guo, Chow &amp; Schonfeld (2018), which used the proportional-volatility diffusion \(\sigma Q\,dW\) in the valuation but simulated additive noise (see the last section).</p>
+
+<h3>1. Model</h3>
+<p>Demand follows</p>
+$$dQ_t=\mu\,(m-Q_t)\,dt+\sigma\,dW_t,\qquad \mu\gt 0,\ \sigma\gt 0 .$$
+<p>Given \(Q_0=Q\), \(Q_s\sim N\!\big(m+(Q-m)e^{-\mu s},\ \tfrac{\sigma^2}{2\mu}(1-e^{-2\mu s})\big)\), and the long-run distribution is \(N(m,\sigma^2/2\mu)\).</p>
+<p>The operator runs either mode 0 or mode 1. Running mode 1 instead of mode 0 earns the flow \(\Phi(Q)\) per unit time, for example \(\Phi(Q)=C_0(Q)-C_1(Q)\) when the modes have operating costs \(C_0,C_1\). Switching 0 → 1 costs \(F^+\ge 0\), switching 1 → 0 costs \(F^-\ge0\), and future payoffs are discounted at rate \(\rho\gt 0\). Assume \(\Phi\) is increasing with a single root \(\hat Q\), so mode 1 is the high-demand mode. If \(\Phi\) decreases instead, the app mirrors the problem through \(Q\mapsto 2m-Q\); this is valid because the OU process is symmetric about \(m\).</p>
+
+<h3>2. Bellman equation and the continuation regions</h3>
+<p>Let \(V_0(Q)\) and \(V_1(Q)\) be the optimal values when currently in mode 0 or mode 1, measured relative to staying in mode 0 forever. The optimal policy has two triggers \(Q_L\lt Q_H\): switch 0 → 1 when \(Q\) reaches \(Q_H\), and 1 → 0 when it reaches \(Q_L\). Between switches, Itô's lemma applied to the Bellman equation gives</p>
+$$\tfrac12\sigma^2V_0''+\mu(m-Q)V_0'-\rho V_0=0,\qquad Q\lt Q_H,$$
+$$\tfrac12\sigma^2V_1''+\mu(m-Q)V_1'-\rho V_1+\Phi(Q)=0,\qquad Q\gt Q_L.$$
+<p>The diffusion coefficient is \(\tfrac12\sigma^2\), not \(\tfrac12\sigma^2Q^2\): this is the only change to the operator compared with the proportional-volatility process. It changes which special functions solve the equation.</p>
+
+<h3>3. Homogeneous solutions: parabolic cylinder functions</h3>
+<p>With \(z=\sqrt{2\mu}\,(Q-m)/\sigma\) and \(\nu=\rho/\mu\), the homogeneous equation becomes \(V_{zz}-zV_z-\nu V=0\). Writing \(V=e^{z^2/4}u(z)\) gives Weber's equation \(u''+\big(\tfrac12-\nu-\tfrac{z^2}{4}\big)u=0\), whose solutions are the parabolic cylinder functions \(D_{-\nu}(\pm z)\). Two convenient positive solutions are</p>
+$$G_+(Q)=\Gamma(\nu)\,e^{z^2/4}D_{-\nu}(-z)=\int_0^\infty t^{\nu-1}e^{zt-t^2/2}\,dt,\qquad G_-(Q)=G_+\big|_{z\to -z}.$$
+<p>\(G_+\) is increasing and tends to 0 as \(Q\to-\infty\); \(G_-\) is decreasing and tends to 0 as \(Q\to+\infty\). Their derivatives are \(G_\pm'(Q)=\pm\frac{\sqrt{2\mu}}{\sigma}\int_0^\infty t^{\nu}e^{\pm zt-t^2/2}dt\). Equivalently, they are combinations of \(M\!\big(\tfrac{\nu}{2},\tfrac12,\tfrac{z^2}{2}\big)\) and \(z\,M\!\big(\tfrac{\nu+1}{2},\tfrac32,\tfrac{z^2}{2}\big)\), Kummer functions in \(z^2\) rather than in \(1/Q\).</p>
+
+<h3>4. Boundary conditions and the general solution</h3>
+<ul>
+<li>As \(Q\to-\infty\), the option to switch into mode 1 becomes worthless, so \(V_0\) cannot contain the exploding \(G_-\): \(V_0(Q)=A\,G_+(Q)\).</li>
+<li>As \(Q\to+\infty\), the option to leave mode 1 becomes worthless, so \(V_1\) approaches the value of staying forever: \(V_1(Q)=B\,G_-(Q)+P(Q)\).</li>
+</ul>
+<p>The particular solution is the expected discounted payoff of never leaving mode 1. By the Feynman–Kac formula,</p>
+$$P(Q)=\mathbb E\!\left[\int_0^\infty e^{-\rho s}\,\Phi(Q_s)\,ds\ \Big|\ Q_0=Q\right]=\int_0^\infty e^{-\rho s}\,\mathbb E\big[\Phi(Q_s)\big]\,ds,$$
+<p>using the Gaussian transition law above. This is the expectation of \(\Phi\), not \(\Phi\) of the expectation. For polynomial payoffs it has a closed form. For \(\Phi=a+bQ+cQ^2\),</p>
+$$P(Q)=\frac{a+bm+c\,(m^2+\tfrac{\sigma^2}{2\mu})}{\rho}+\frac{(b+2cm)(Q-m)}{\rho+\mu}+\frac{c\,\big((Q-m)^2-\tfrac{\sigma^2}{2\mu}\big)}{\rho+2\mu}.$$
+<p>For general \(\Phi\), the app evaluates the double integral numerically, with Gauss–Hermite quadrature over the Gaussian (details in Section 5).</p>
+
+<h3>5. Value matching and smooth pasting</h3>
+<p>At the triggers, the value of switching (net of its cost) must equal the value of staying, and the slopes must match:</p>
+$$A\,G_+(Q_H)=B\,G_-(Q_H)+P(Q_H)-F^+,\qquad B\,G_-(Q_L)+P(Q_L)=A\,G_+(Q_L)-F^-,$$
+$$A\,G_+'(Q_H)=B\,G_-'(Q_H)+P'(Q_H),\qquad A\,G_+'(Q_L)=B\,G_-'(Q_L)+P'(Q_L).$$
+<p>The four equations in \((A,B,Q_L,Q_H)\) are linear in \(A,B\); eliminating them leaves two nonlinear equations in \((Q_L,Q_H)\).</p>
+<p><b>How the app solves them.</b> Inside the band \((Q_L,Q_H)\) both value functions satisfy their equations, so the difference \(D=V_1-V_0\) satisfies</p>
+$$\tfrac12\sigma^2D''+\mu(m-Q)D'-\rho D+\Phi(Q)=0,\qquad Q_L\lt Q\lt Q_H,$$
+<p>with \(D(Q_H)=F^+\), \(D(Q_L)=-F^-\) (value matching) and \(D'(Q_H)=D'(Q_L)=0\) (smooth pasting, since \(V_0'=V_1'\) at both triggers). For trial triggers, the app integrates this ODE inward from each end with fourth-order Runge–Kutta and requires the two solutions to meet with equal value and slope at \(\hat Q\). Newton's method on that mismatch, with a continuation that scales the costs up from near zero, gives \((Q_L,Q_H)\). The coefficients \(A,B\) then follow from smooth pasting. Shooting inside the band avoids evaluating \(G_\pm\) far into their exponential tails, which keeps the solve stable for small discount rates and wide bands. When one trigger lies beyond ±8 long-run SD, the app solves the remaining one-sided problem with \(G_\pm\) and \(P\) directly.</p>
+<p>\(P(Q)\) is computed as \(\bar E/\rho+R(Q)\), where \(\bar E\) is the long-run mean of \(\Phi\) and \(R\) is the integral of the transient part \(e^{-\rho s}\big(\mathbb E[\Phi(Q_s)]-\bar E\big)\) over graded Gauss–Legendre panels in \(s\). This stays accurate when \(\rho\ll\mu\).</p>
+
+<h3>6. Properties used as checks</h3>
+<ul>
+<li><b>No switching costs.</b> As \(F^\pm\to0\), both triggers converge to the break-even point \(\hat Q\) with \(\Phi(\hat Q)=0\). Subtracting the two equations at a common trigger with \(V_0=V_1\), \(V_0'=V_1'\) and \(V_0''=V_1''\) gives \(\Phi(\hat Q)=0\). With free switching, the myopic rule is optimal.</li>
+<li><b>Switching regions.</b> Optimality requires \(\Phi(Q)\ge\rho F^+\) wherever the policy enters mode 1 and \(\Phi(Q)\le-\rho F^-\) wherever it leaves, so \(Q_L\lt \hat Q\lt Q_H\). The app also verifies on a grid that neither value function can be improved by switching early.</li>
+<li><b>One-sided solutions.</b> If one switch is never worth making within ±8 long-run standard deviations of \(m\), the corresponding coefficient is zero and the app solves for the single remaining trigger.</li>
+</ul>
+
+<h3>7. Estimating the OU process from data</h3>
+<p>The exact discretization over a step \(\Delta_i\) is</p>
+$$Q_{i}=m+(Q_{i-1}-m)e^{-\mu\Delta_i}+\varepsilon_i,\qquad \varepsilon_i\sim N\!\Big(0,\tfrac{\sigma^2}{2\mu}\big(1-e^{-2\mu\Delta_i}\big)\Big).$$
+<p>With equal spacing \(\Delta\), this is an AR(1) model \(Q_i=a+bQ_{i-1}+\varepsilon_i\), and the conditional maximum-likelihood estimates are \(\hat\mu=-\ln\hat b/\Delta\), \(\hat m=\hat a/(1-\hat b)\) and \(\hat\sigma^2=2\hat\mu\,\hat s^2/(1-\hat b^2)\), where \(\hat s^2\) is the residual variance. With irregular spacing, the app maximizes the exact Gaussian likelihood numerically. Standard errors come from the observed information (a numerical Hessian). Mean reversion requires \(0\lt \hat b\lt 1\). The speed \(\mu\) is weakly identified unless the sample spans many half-lives \(\ln2/\mu\).</p>
+
+<h3>8. Differences from Guo, Chow &amp; Schonfeld (2018)</h3>
+<ul>
+<li>The paper's valuation equations use \(\tfrac12\sigma^2Q^2V''\) (the process \(dQ=\mu(m-Q)dt+\sigma Q\,dW\)), which leads to Kummer functions in \(1/Q\). With \(\sigma=7\), that process has infinite variance and Eq. (41) explodes when simulated. The simulated paths in the paper behave like additive OU, which is the model solved here.</li>
+<li>Here \(P(Q)\) is the exact expectation \(\mathbb E[\Phi(Q_s)]\) under the Gaussian transition law, rather than \(\Phi(\mathbb E[Q_s])\).</li>
+<li>The boundary conditions are imposed at \(Q\to\pm\infty\), where each option becomes worthless. With zero switching costs, the triggers coincide with the root of \(\Phi\).</li>
+<li>The smooth-pasting conditions use \(\tfrac{d}{dQ}\) of the full solution. In the paper's Eq. (38), the derivative rows are missing a factor \(1/Q\) and have the wrong sign on \(\partial P/\partial Q\).</li>
+</ul>
+
+<h3>References</h3>
+<ul class="small">
+<li>Dixit, A. (1989). Entry and exit decisions under uncertainty. <i>Journal of Political Economy</i> 97(3), 620–638.</li>
+<li>Dixit, A., Pindyck, R. (1994). <i>Investment under Uncertainty</i>. Princeton University Press.</li>
+<li>Guo, Q.-W., Chow, J.Y.J., Schonfeld, P. (2018). Stochastic dynamic switching in fixed and flexible transit services as market entry-exit real options. <i>Transportation Research Part C: Emerging Technologies</i> 94, 288–306. doi:10.1016/j.trc.2017.08.008</li>
+<li>Abramowitz, M., Stegun, I. (1964). <i>Handbook of Mathematical Functions</i>, ch. 19 (parabolic cylinder functions).</li>
+</ul>
+
+</div></main>
+
+<script>
+// ===== OU mode-switching core (no DOM). Shared by the app and the Node tests. =====
+const OU = (() => {
+  // ---------- quadrature ----------
+  function gaussLegendre(n) {            // nodes/weights on [-1,1]
+    const x = new Float64Array(n), w = new Float64Array(n);
+    const m = (n + 1) >> 1;
+    for (let i = 0; i < m; i++) {
+      let z = Math.cos(Math.PI * (i + 0.75) / (n + 0.5)), pp = 0;
+      for (let it = 0; it < 100; it++) {
+        let p1 = 1, p2 = 0;
+        for (let j = 0; j < n; j++) { const p3 = p2; p2 = p1; p1 = ((2 * j + 1) * z * p2 - j * p3) / (j + 1); }
+        pp = n * (z * p1 - p2) / (z * z - 1);
+        const z1 = z; z = z1 - p1 / pp;
+        if (Math.abs(z - z1) < 1e-15) break;
+      }
+      x[i] = -z; x[n - 1 - i] = z; w[i] = w[n - 1 - i] = 2 / ((1 - z * z) * pp * pp);
+    }
+    return { x, w };
+  }
+  function gaussHermiteProb(n) {         // E[f(Z)], Z~N(0,1): nodes and weights summing to 1
+    const x = new Float64Array(n), w = new Float64Array(n);
+    const PIM4 = 0.7511255444649425; let z = 0;
+    const m = (n + 1) >> 1;
+    for (let i = 0; i < m; i++) {
+      if (i === 0) z = Math.sqrt(2 * n + 1) - 1.85575 * Math.pow(2 * n + 1, -0.16667);
+      else if (i === 1) z -= 1.14 * Math.pow(n, 0.426) / z;
+      else if (i === 2) z = 1.86 * z - 0.86 * x[0];
+      else if (i === 3) z = 1.91 * z - 0.91 * x[1];
+      else z = 2 * z - x[i - 2];
+      let pp = 0;
+      for (let it = 0; it < 200; it++) {
+        let p1 = PIM4, p2 = 0;
+        for (let j = 0; j < n; j++) { const p3 = p2; p2 = p1; p1 = z * Math.sqrt(2 / (j + 1)) * p2 - Math.sqrt(j / (j + 1)) * p3; }
+        pp = Math.sqrt(2 * n) * p2;
+        const z1 = z; z = z1 - p1 / pp;
+        if (Math.abs(z - z1) < 1e-14) break;
+      }
+      x[i] = z; x[n - 1 - i] = -z; w[i] = w[n - 1 - i] = 2 / (pp * pp);
+    }
+    // physicists' -> probabilists'
+    const X = new Float64Array(n), W = new Float64Array(n); let s = 0;
+    for (let i = 0; i < n; i++) { X[i] = x[i] * Math.SQRT2; W[i] = w[i] / Math.sqrt(Math.PI); s += W[i]; }
+    for (let i = 0; i < n; i++) W[i] /= s;
+    return { x: X, w: W };
+  }
+  const GL16 = gaussLegendre(16), GL24 = gaussLegendre(24), GH = gaussHermiteProb(48);
+  function glPanels(f, a, b, panels) {   // composite 16-point Gauss-Legendre
+    const h = (b - a) / panels; let s = 0;
+    for (let p = 0; p < panels; p++) {
+      const c = a + (p + 0.5) * h, r = 0.5 * h;
+      for (let i = 0; i < 16; i++) s += GL16.w[i] * f(c + r * GL16.x[i]);
+    }
+    return s * 0.5 * h;
+  }
+
+  // ---------- homogeneous solutions ----------
+  // I_p(z) = int_0^inf t^p exp(z t - t^2/2) dt,  p > -1.
+  // Gp(z) = I_{nu-1}(z) = Gamma(nu) e^{z^2/4} D_{-nu}(-z)  (increasing),  Gm(z) = Gp(-z)  (decreasing)
+  // dGp/dz = I_nu(z).  Returned on a log scale to avoid overflow: {logv}
+  function logI(p, z) {
+    // split exponent: if z>0 factor out e^{z^2/2} and integrate e^{-(t-z)^2/2}
+    const shift = z > 0 ? z * z / 2 : 0;
+    const g = z > 0 ? (t) => Math.exp(-(t - z) * (t - z) / 2) : (t) => Math.exp(z * t - t * t / 2);
+    // [0,1]: analytic piece on [0,eps] plus geometrically graded panels (handles the t^p singularity)
+    const eps = 1e-10, dg0 = z > 0 ? z * Math.exp(-z * z / 2) : z;   // g'(0)
+    let part1 = g(0) * Math.pow(eps, p + 1) / (p + 1) + dg0 * Math.pow(eps, p + 2) / (p + 2);
+    for (let a = eps; a < 1; a *= 10) part1 += glPanels((t) => Math.pow(t, p) * g(t), a, Math.min(1, a * 10), 1);
+    const T = Math.max(z, 0) + 14;
+    const part2 = glPanels((t) => Math.pow(t, p) * g(t), 1, T, Math.ceil((T - 1) / 0.5));
+    return shift + Math.log(part1 + part2);
+  }
+
+  // ---------- payoff expectation ----------
+  // P(Q) = int_0^inf e^{-rho s} E[Phi(Q_s) | Q_0=Q] ds  (value of staying in mode 1 forever)
+  function makeP(par, phi) {
+    // P(Q) = Ebar/rho + R(Q), Ebar = E_stationary[Phi], R(Q) = int_0^inf e^{-rho s} (E[Phi(Q_s)|Q] - Ebar) ds.
+    // R's integrand decays at rate >= mu, so it is integrated on graded panels resolving both 1/rho and 1/mu.
+    const { mu, m, sigma, rho } = par, sinf = sigma / Math.sqrt(2 * mu);
+    let Ebar = 0; for (let j = 0; j < GH.x.length; j++) Ebar += GH.w[j] * phi(m + sinf * GH.x[j]);
+    const sMax = 45 / mu, s0 = Math.min(1 / rho, 1 / mu) / 256, edges = [0];
+    for (let a = s0; a < sMax; a *= 1.6) edges.push(a); edges.push(sMax);
+    const pts = [];
+    for (let p = 0; p + 1 < edges.length; p++) {
+      const a = edges[p], b = edges[p + 1];
+      for (let i = 0; i < 16; i++) {
+        const s = 0.5 * (b - a) * GL16.x[i] + 0.5 * (a + b), w = 0.5 * (b - a) * GL16.w[i] * Math.exp(-rho * s);
+        pts.push({ e: Math.exp(-mu * s), sd: sigma * Math.sqrt(-Math.expm1(-2 * mu * s) / (2 * mu)), w });
+      }
+    }
+    const P = function P(Q) {
+      let tot = 0;
+      for (const pt of pts) {
+        const mean = m + (Q - m) * pt.e; let ex = 0;
+        for (let j = 0; j < GH.x.length; j++) ex += GH.w[j] * phi(mean + pt.sd * GH.x[j]);
+        tot += pt.w * (ex - Ebar);
+      }
+      return Ebar / rho + tot;
+    };
+    P.Ebar = Ebar;
+    return P;
+  }
+
+  // natural cubic spline on a uniform grid -> value and derivative
+  function spline(xs, ys) {
+    const n = xs.length, h = xs[1] - xs[0], M = new Float64Array(n);
+    const a = new Float64Array(n), b = new Float64Array(n), c = new Float64Array(n), d = new Float64Array(n);
+    for (let i = 1; i < n - 1; i++) { a[i] = 1; b[i] = 4; c[i] = 1; d[i] = 6 * (ys[i + 1] - 2 * ys[i] + ys[i - 1]) / (h * h); }
+    b[0] = b[n - 1] = 1;
+    for (let i = 1; i < n; i++) { const w = a[i] / b[i - 1]; b[i] -= w * c[i - 1]; d[i] -= w * d[i - 1]; }
+    M[n - 1] = d[n - 1] / b[n - 1];
+    for (let i = n - 2; i >= 0; i--) M[i] = (d[i] - c[i] * M[i + 1]) / b[i];
+    function locate(x) { let i = Math.floor((x - xs[0]) / h); return Math.min(Math.max(i, 0), n - 2); }
+    return {
+      f(x) { const i = locate(x), t = x - xs[i], u = xs[i + 1] - x;
+        return M[i] * u ** 3 / (6 * h) + M[i + 1] * t ** 3 / (6 * h) + (ys[i] / h - M[i] * h / 6) * u + (ys[i + 1] / h - M[i + 1] * h / 6) * t; },
+      df(x) { const i = locate(x), t = x - xs[i], u = xs[i + 1] - x;
+        return -M[i] * u * u / (2 * h) + M[i + 1] * t * t / (2 * h) - (ys[i] / h - M[i] * h / 6) + (ys[i + 1] / h - M[i + 1] * h / 6); },
+    };
+  }
+
+  // ---------- 2x2 / Newton helpers ----------
+  function solve2(a11, a12, a21, a22, b1, b2) { const det = a11 * a22 - a12 * a21; return [(b1 * a22 - a12 * b2) / det, (a11 * b2 - a21 * b1) / det]; }
+
+  function findRoots(f, lo, hi, n = 2000) {
+    const roots = []; let x0 = lo, f0 = f(lo);
+    for (let i = 1; i <= n; i++) {
+      const x1 = lo + (hi - lo) * i / n, f1 = f(x1);
+      if (isFinite(f0) && isFinite(f1) && f0 * f1 <= 0 && !(f0 === 0 && f1 === 0)) {
+        let a = x0, b = x1, fa = f0;
+        for (let k = 0; k < 80; k++) { const c = 0.5 * (a + b), fc = f(c); if (fa * fc <= 0) b = c; else { a = c; fa = fc; } }
+        const r = 0.5 * (a + b); if (!roots.length || Math.abs(r - roots[roots.length - 1]) > 1e-9 * (hi - lo)) roots.push(r);
+      }
+      x0 = x1; f0 = f1;
+    }
+    return roots;
+  }
+
+  // ---------- main solver ----------
+  // Formulated in the value difference D(Q) = V1(Q) - V0(Q), which stays O(F, Phi/mu) for any rho.
+  // In the band [QL, QH] both modes continue, so D solves (1/2)s^2 D'' + mu(m-Q)D' - rho D = -Phi, with
+  //   D(QH) = F+, D(QL) = -F-, D'(QH) = D'(QL) = 0   (value matching + smooth pasting).
+  // Basis: I(z) = int t^{nu-1} e^{zt - t^2/2} dt (= G+), I(-z) (= G-), c = I(0).
+  //   h1 = (I(z)+I(-z))/(2c)  (even, = 1 + O(nu z^2)),  h2 = (I(z)-I(-z))/2  (odd).
+  //   P = Ebar/rho + R(Q) with R bounded; particular solution  Ptil = R - (Ebar/rho)(h1 - 1).
+  //   D = Ptil + alpha h1 + beta h2.
+  function solveSwitching(par, phiIn, Fp, Fm, opts = {}) {
+    const { mu, m, sigma, rho } = par;
+    const sinf = sigma / Math.sqrt(2 * mu), k = 1 / sinf, nu = rho / mu;   // z = (Q - m)/sinf = sqrt(2mu)(Q-m)/sigma
+    const lo = m - 8 * sinf, hi = m + 8 * sinf;
+    const notes = [];
+    const phiLo = phiIn(m - 3 * sinf), phiHi = phiIn(m + 3 * sinf);
+    const flip = phiHi < phiLo;                               // mode 1 better at LOW demand: mirror Q -> 2m - Q
+    const phi = flip ? (q) => phiIn(2 * m - q) : phiIn;
+    if (flip) notes.push('Mode 1 is the better mode at LOW demand, so switch into mode 1 when demand falls and out of it when demand rises.');
+    const F_up = Fp, F_dn = Fm, back = (q) => (flip ? 2 * m - q : q);
+    const roots = findRoots(phi, lo, hi);
+    if (!roots.length) {
+      return { ok: true, noSwitch: true, alwaysMode: phiIn(m) > 0 ? 1 : 0, roots: [], Qhat: NaN, sinf, notes:
+        notes.concat(['Φ does not change sign within ±8 long-run SDs of the mean, so the same mode is always better; never switch away from it.']) };
+    }
+    if (roots.length > 1) notes.push(`Φ changes sign ${roots.length} times in the plausible range; thresholds are computed around the root nearest the mean.`);
+    const Qhat = roots.reduce((a, b) => (Math.abs(b - m) < Math.abs(a - m) ? b : a));
+    // R(Q) on a grid + spline
+    const P = makeP(par, phi), Ebar = P.Ebar, N = opts.gridN || 321;
+    const xs = new Float64Array(N), ys = new Float64Array(N);
+    for (let i = 0; i < N; i++) { xs[i] = lo + (hi - lo) * i / (N - 1); ys[i] = P(xs[i]) - Ebar / rho; }
+    const Rs = spline(xs, ys);
+    const z = (q) => k * (q - m), c = Math.exp(logI(nu - 1, 0)), Er = Ebar / rho;
+    // basis values (and Q-derivatives)
+    // Two-sided problem solved by shooting: in the band, D'' = (2/s^2)[rho D - mu(m-Q) D' - Phi(Q)].
+    // Integrate inward from QL (D=-F-, D'=0) and from QH (D=F+, D'=0) and match D, D' at Qhat.
+    // Integrating toward the centre keeps the growing homogeneous modes small, and no 1/rho-sized constants appear.
+    const s2 = 2 / (sigma * sigma);
+    function rk4(q0, q1, D0, d0, dense) {
+      const n = Math.max(80, Math.ceil(Math.abs(q1 - q0) / (sinf / 150))), h = (q1 - q0) / n;
+      let q = q0, D = D0, d = d0;
+      const f = (qq, DD, dd) => s2 * (rho * DD - mu * (m - qq) * dd - phi(qq));
+      if (dense) dense.push([q, D, d]);
+      for (let i = 0; i < n; i++) {
+        const k1D = d, k1d = f(q, D, d);
+        const k2D = d + 0.5 * h * k1d, k2d = f(q + 0.5 * h, D + 0.5 * h * k1D, d + 0.5 * h * k1d);
+        const k3D = d + 0.5 * h * k2d, k3d = f(q + 0.5 * h, D + 0.5 * h * k2D, d + 0.5 * h * k2d);
+        const k4D = d + h * k3d, k4d = f(q + h, D + h * k3D, d + h * k3d);
+        D += h * (k1D + 2 * k2D + 2 * k3D + k4D) / 6; d += h * (k1d + 2 * k2d + 2 * k3d + k4d) / 6; q += h;
+        if (dense) dense.push([q, D, d]);
+      }
+      return [D, d];
+    }
+    function system(QL, QH, F1, F2) {
+      const Qm = Math.min(Math.max(Qhat, QL), QH);
+      const [DL, dL] = rk4(QL, Qm, -F2, 0), [DH, dH] = rk4(QH, Qm, F1, 0);
+      return { r: [DL - DH, (dL - dH) * sinf] };
+    }
+    const scale = Math.max(1e-12, Math.abs(F_up) + Math.abs(F_dn));
+    const phiScale = Math.max(Math.abs(phi(m - 2 * sinf)), Math.abs(phi(m + 2 * sinf))) / (mu + rho);
+    const tolR = 1e-10 * Math.max(1, scale) + 1e-13 * phiScale;
+    function newton(QL, QH, F1, F2) {
+      for (let it = 0; it < 80; it++) {
+        const r = system(QL, QH, F1, F2).r, nr = Math.hypot(r[0], r[1]);
+        if (nr < tolR) return { QL, QH, ok: true };
+        const h = 1e-6 * sinf;
+        const sL = system(QL + h, QH, F1, F2).r, sH = system(QL, QH + h, F1, F2).r;
+        const [dL, dH] = solve2((sL[0] - r[0]) / h, (sH[0] - r[0]) / h, (sL[1] - r[1]) / h, (sH[1] - r[1]) / h, -r[0], -r[1]);
+        if (!isFinite(dL) || !isFinite(dH)) return { ok: false };
+        let t = 1, accepted = false;
+        for (let ls = 0; ls < 40; ls++) {
+          const nL = QL + t * dL, nH = QH + t * dH;
+          if (nL < nH && nL <= Qhat && nH >= Qhat && nL > lo && nH < hi) {
+            const rr = system(nL, nH, F1, F2).r;
+            if (Math.hypot(rr[0], rr[1]) < nr * (1 - 1e-4 * t)) { QL = nL; QH = nH; accepted = true; break; }
+          }
+          t *= 0.5;
+        }
+        if (!accepted) return { ok: nr < 1e3 * tolR, QL, QH };
+      }
+      return { ok: false, QL, QH };
+    }
+    if (F_up + F_dn <= 0) return finish(Qhat, Qhat, null);
+    // continuation in the switching costs from the small-cost band around Qhat
+    const slope = Math.max(Math.abs(Rs.df(Qhat) * (rho + mu)), 1e-12);
+    let lam = 1e-4, QL, QH;
+    { const d = Math.cbrt(6 * sigma * sigma * lam * (F_up + F_dn) / 2 / slope);
+      const wU = F_up / (F_up + F_dn), wD = F_dn / (F_up + F_dn);
+      QL = Qhat - 2 * d * wD - 1e-9 * sinf; QH = Qhat + 2 * d * wU + 1e-9 * sinf; }
+    let step = 4, guard = 0;
+    while (guard++ < 300) {
+      const res = newton(QL, QH, lam * F_up, lam * F_dn);
+      if (res.ok) {
+        QL = res.QL; QH = res.QH;
+        if (lam >= 1) return finish(QL, QH, system(QL, QH, F_up, F_dn));
+        step = Math.min(4, step * 1.5); lam = Math.min(1, lam * step);
+      } else {
+        if (step < 1.02) { const one = oneSided(); if (one) return one;
+          return { ok: false, notes: notes.concat(['The solver did not converge. Try different parameters or check Φ.']) }; }
+        lam = lam / step; step = Math.sqrt(step); lam = Math.min(1, lam * step);
+      }
+    }
+    return { ok: false, notes: notes.concat(['The solver did not converge.']) };
+
+    // One threshold only (the other switch is never worth making within ±8 long-run SDs).
+    function oneSided() {
+      const bisect = (f, a, b) => { let fa = f(a), fb = f(b); if (!(fa * fb <= 0)) return null;
+        for (let i = 0; i < 100; i++) { const cc = 0.5 * (a + b), fc = f(cc); if (fa * fc <= 0) { b = cc; fb = fc; } else { a = cc; fa = fc; } } return 0.5 * (a + b); };
+      // (a) enter, never exit: V1 = P everywhere, V0 = A G+ below QH  ->  D = P - A G+ ; D(QH) = F+, D'(QH) = 0
+      const Dplus = (q, A) => Er + Rs.f(q) - A * Math.exp(logI(nu - 1, z(q)));
+      const Aof = (q) => Rs.df(q) / (k * Math.exp(logI(nu, z(q))));
+      const qe = bisect((q) => Dplus(q, Aof(q)) - F_up, Qhat, hi - 1e-9 * sinf);
+      if (qe !== null) { const A = Aof(qe), Df = (q) => (q >= qe ? F_up : Dplus(q, A));
+        const out = finish(lo - 1, qe, null, Df); if (out.checks.pass) { out.notes.push('Leaving mode 1 is never worth it within ±8 long-run SDs of the mean: there is only an entry threshold.'); return out; } }
+      // (b) exit, never enter: V0 = 0, V1 = B G- + P above QL  ->  D = P + B G- ; D(QL) = -F-, D'(QL) = 0
+      const Dminus = (q, B) => Er + Rs.f(q) + B * Math.exp(logI(nu - 1, -z(q)));
+      const Bof = (q) => Rs.df(q) / (k * Math.exp(logI(nu, -z(q))));
+      const qx = bisect((q) => Dminus(q, Bof(q)) + F_dn, lo + 1e-9 * sinf, Qhat);
+      if (qx !== null) { const B = Bof(qx), Df = (q) => (q <= qx ? -F_dn : Dminus(q, B));
+        const out = finish(qx, hi + 1, null, Df); if (out.checks.pass) { out.notes.push('Entering mode 1 is never worth it within ±8 long-run SDs of the mean: there is only an exit threshold.'); return out; } }
+      return null;
+    }
+
+    function finish(QL, QH, sys, Dfun) {
+      // D(Q) = V1 - V0 under the optimal policy (clamped to F+ / -F- in the switching regions)
+      let D;
+      if (Dfun) D = Dfun;
+      else if (sys) {
+        const Qm = Math.min(Math.max(Qhat, QL), QH), left = [], right = [];
+        rk4(QL, Qm, -F_dn, 0, left); rk4(QH, Qm, F_up, 0, right);
+        const pts = left.concat(right.reverse());     // sorted by Q
+        D = (q) => { if (q >= QH) return F_up; if (q <= QL) return -F_dn;
+          let lo2 = 0, hi2 = pts.length - 1; while (hi2 - lo2 > 1) { const md = (lo2 + hi2) >> 1; if (pts[md][0] <= q) lo2 = md; else hi2 = md; }
+          const [q0, D0, d0] = pts[lo2], [q1, D1, d1] = pts[hi2], hh = q1 - q0; if (!(hh > 0)) return D0;
+          const t = (q - q0) / hh, t2 = t * t, t3 = t2 * t;   // cubic Hermite
+          return (2 * t3 - 3 * t2 + 1) * D0 + (t3 - 2 * t2 + t) * hh * d0 + (-2 * t3 + 3 * t2) * D1 + (t3 - t2) * hh * d1; };
+      }
+      else D = (q) => (q >= QH ? F_up : -F_dn);
+      const out = {
+        ok: true, flip, Qhat: back(Qhat), notes, sinf, roots: roots.map(back),
+        enter1: QH > hi ? NaN : back(QH), exit1: QL < lo ? NaN : back(QL),
+        QL: Math.min(back(QL), back(QH)), QH: Math.max(back(QL), back(QH)),
+        D: flip ? (q) => D(2 * m - q) : D,
+      };
+      // optimality checks: inside the band -F- <= D <= F+ (no early switch pays); in the switching regions the
+      // HJB inequality requires Phi >= rho F+ where mode 1 is entered and Phi <= -rho F- where it is left
+      let gapUp = 0, gapDn = 0, hjb0 = 0, hjb1 = 0;
+      const span = 6 * sinf;
+      for (let i = 0; i <= 600; i++) {
+        const q = m - span + 2 * span * i / 600;
+        if (q > QL && q < QH) { const d = D(q); gapUp = Math.max(gapUp, d - F_up); gapDn = Math.max(gapDn, -F_dn - d); }
+        if (q >= QH) hjb0 = Math.max(hjb0, rho * F_up - phi(q));
+        if (q <= QL) hjb1 = Math.max(hjb1, phi(q) + rho * F_dn);
+      }
+      const tol = 1e-6 * Math.max(1, scale), tolH = 1e-9 * Math.max(1, scale) + 1e-12 * Math.abs(phiScale * rho);
+      const vm = sys ? sys.r : [0, 0];
+      out.checks = { vm, enterGap: gapUp, exitGap: gapDn, hjbEnter: hjb0, hjbExit: hjb1, tol,
+        pass: gapUp <= tol && gapDn <= tol && hjb0 <= tolH && hjb1 <= tolH && Math.hypot(vm[0], vm[1]) <= 1e3 * tolR };
+      return out;
+    }
+  }
+
+  // ---------- OU estimation ----------
+  function ouLogLik(theta, t, x) {   // theta = [mu, m, sigma]
+    const [mu, m, s] = theta; if (mu <= 0 || s <= 0) return -Infinity;
+    let ll = 0;
+    for (let i = 1; i < x.length; i++) {
+      const dt = t[i] - t[i - 1], e = Math.exp(-mu * dt);
+      const mean = m + (x[i - 1] - m) * e, v = s * s * (-Math.expm1(-2 * mu * dt)) / (2 * mu);
+      ll += -0.5 * (Math.log(2 * Math.PI * v) + (x[i] - mean) ** 2 / v);
+    }
+    return ll;
+  }
+  function nelderMead(f, x0, step, iters = 4000) {
+    const n = x0.length; let pts = [x0.slice()];
+    for (let i = 0; i < n; i++) { const p = x0.slice(); p[i] += step[i]; pts.push(p); }
+    let vals = pts.map(f);
+    for (let it = 0; it < iters; it++) {
+      const idx = vals.map((v, i) => i).sort((a, b) => vals[a] - vals[b]);
+      pts = idx.map((i) => pts[i]); vals = idx.map((i) => vals[i]);
+      if (Math.abs(vals[n] - vals[0]) < 1e-12 * (1 + Math.abs(vals[0]))) break;
+      const c = new Array(n).fill(0);
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += pts[i][j] / n;
+      const xr = c.map((v, j) => v + (v - pts[n][j])), fr = f(xr);
+      if (fr < vals[0]) { const xe = c.map((v, j) => v + 2 * (v - pts[n][j])), fe = f(xe); if (fe < fr) { pts[n] = xe; vals[n] = fe; } else { pts[n] = xr; vals[n] = fr; } }
+      else if (fr < vals[n - 1]) { pts[n] = xr; vals[n] = fr; }
+      else { const xc = c.map((v, j) => v + 0.5 * (pts[n][j] - v)), fc = f(xc);
+        if (fc < vals[n]) { pts[n] = xc; vals[n] = fc; }
+        else { for (let i = 1; i <= n; i++) { pts[i] = pts[i].map((v, j) => pts[0][j] + 0.5 * (v - pts[0][j])); vals[i] = f(pts[i]); } } }
+    }
+    return { x: pts[0], f: vals[0] };
+  }
+  function invert3(A) {
+    const [a, b, c] = A[0], [d, e, f] = A[1], [g, h, i] = A[2];
+    const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    return [[(e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det],
+      [(f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det],
+      [(d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det]];
+  }
+  function estimateOU(t, x) {
+    const n = x.length; if (n < 10) throw new Error('Need at least 10 observations.');
+    const dts = []; for (let i = 1; i < n; i++) dts.push(t[i] - t[i - 1]);
+    if (dts.some((d) => !(d > 0))) throw new Error('Times must be strictly increasing.');
+    const dbar = dts.reduce((a, b) => a + b, 0) / dts.length;
+    const regular = dts.every((d) => Math.abs(d - dbar) <= 1e-6 * dbar + 1e-12);
+    // AR(1) regression (exact MLE when spacing is regular)
+    let sx = 0, sy = 0, sxx = 0, sxy = 0; const k = n - 1;
+    for (let i = 1; i < n; i++) { sx += x[i - 1]; sy += x[i]; sxx += x[i - 1] ** 2; sxy += x[i - 1] * x[i]; }
+    const bhat = (k * sxy - sx * sy) / (k * sxx - sx * sx), ahat = (sy - bhat * sx) / k;
+    let rss = 0; for (let i = 1; i < n; i++) rss += (x[i] - ahat - bhat * x[i - 1]) ** 2;
+    const warnings = [];
+    if (!(bhat > 0 && bhat < 1)) warnings.push(`The AR(1) coefficient is ${bhat.toFixed(4)}; mean reversion is not detected (needs 0 < b < 1). Estimates below are unreliable.`);
+    const bb = Math.min(Math.max(bhat, 1e-6), 1 - 1e-9);
+    let mu = -Math.log(bb) / dbar, m = ahat / (1 - bb), sigma = Math.sqrt(2 * mu * (rss / k) / (1 - bb * bb));
+    // exact MLE (refines the irregular-spacing case; leaves the regular case unchanged)
+    const negll = (p) => -ouLogLik([Math.exp(p[0]), p[1], Math.exp(p[2])], t, x);
+    const nm = nelderMead(negll, [Math.log(mu), m, Math.log(sigma)], [0.2, 0.1 * Math.abs(sigma / Math.sqrt(2 * mu)) + 1e-3, 0.2]);
+    const th = [Math.exp(nm.x[0]), nm.x[1], Math.exp(nm.x[2])];
+    if (isFinite(nm.f)) [mu, m, sigma] = th;
+    // standard errors from the observed information (numerical Hessian in (mu, m, sigma))
+    const ll = (p) => ouLogLik(p, t, x), base = [mu, m, sigma], H = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    const hs = base.map((v) => 1e-4 * Math.max(Math.abs(v), 1e-3));
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      const pp = base.slice(), pm = base.slice(), mp = base.slice(), mm = base.slice();
+      pp[i] += hs[i]; pp[j] += hs[j]; pm[i] += hs[i]; pm[j] -= hs[j]; mp[i] -= hs[i]; mp[j] += hs[j]; mm[i] -= hs[i]; mm[j] -= hs[j];
+      H[i][j] = (ll(pp) - ll(pm) - ll(mp) + ll(mm)) / (4 * hs[i] * hs[j]);
+    }
+    let se = [NaN, NaN, NaN];
+    try { const C = invert3(H.map((r) => r.map((v) => -v))); se = [0, 1, 2].map((i) => Math.sqrt(C[i][i])); } catch (e) { /* keep NaN */ }
+    const T = t[n - 1] - t[0];
+    if (mu * T < 5) warnings.push(`The sample spans only ${(mu * T).toFixed(1)} mean-reversion times (μ·T); the speed μ is hard to pin down from this little data.`);
+    return { mu, m, sigma, se, n, dt: dbar, regular, b: bhat, loglik: -nm.f, halfLife: Math.log(2) / mu, sinf: sigma / Math.sqrt(2 * mu), warnings };
+  }
+
+  // ---------- interpolation for cost tables ----------
+  function pchip(xs, ys) {   // monotone cubic; linear extrapolation with end slopes
+    const n = xs.length, h = [], dlt = [], d = new Array(n);
+    for (let i = 0; i < n - 1; i++) { h.push(xs[i + 1] - xs[i]); dlt.push((ys[i + 1] - ys[i]) / h[i]); }
+    if (n === 2) { d[0] = d[1] = dlt[0]; }
+    else {
+      for (let i = 1; i < n - 1; i++) {
+        if (dlt[i - 1] * dlt[i] <= 0) d[i] = 0;
+        else { const w1 = 2 * h[i] + h[i - 1], w2 = h[i] + 2 * h[i - 1]; d[i] = (w1 + w2) / (w1 / dlt[i - 1] + w2 / dlt[i]); }
+      }
+      const end = (h0, h1, d0, d1) => { let s = ((2 * h0 + h1) * d0 - h0 * d1) / (h0 + h1); if (s * d0 <= 0) s = 0; else if (d0 * d1 <= 0 && Math.abs(s) > Math.abs(3 * d0)) s = 3 * d0; return s; };
+      d[0] = end(h[0], h[1], dlt[0], dlt[1]); d[n - 1] = end(h[n - 2], h[n - 3], dlt[n - 2], dlt[n - 3]);
+    }
+    return (x) => {
+      if (x <= xs[0]) return ys[0] + d[0] * (x - xs[0]);
+      if (x >= xs[n - 1]) return ys[n - 1] + d[n - 1] * (x - xs[n - 1]);
+      let lo = 0, hi = n - 1; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
+      const t = (x - xs[lo]) / h[lo], t2 = t * t, t3 = t2 * t;
+      return (2 * t3 - 3 * t2 + 1) * ys[lo] + (t3 - 2 * t2 + t) * h[lo] * d[lo] + (-2 * t3 + 3 * t2) * ys[lo + 1] + (t3 - t2) * h[lo] * d[lo + 1];
+    };
+  }
+  function linear(xs, ys) {
+    const n = xs.length;
+    return (x) => {
+      let i = 0; if (x <= xs[0]) i = 0; else if (x >= xs[n - 1]) i = n - 2; else { let lo = 0, hi = n - 1; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; } i = lo; }
+      return ys[i] + (ys[i + 1] - ys[i]) * (x - xs[i]) / (xs[i + 1] - xs[i]);
+    };
+  }
+
+  // ---------- formula compiler ----------
+  const ALLOWED = new Set(['Q', 'abs', 'sqrt', 'cbrt', 'exp', 'log', 'ln', 'log10', 'pow', 'min', 'max', 'sin', 'cos', 'tan', 'atan', 'tanh', 'floor', 'ceil', 'round', 'sign', 'PI', 'E', 'pos']);
+  function compileFormula(src) {
+    const s = String(src).trim(); if (!s) throw new Error('Formula is empty.');
+    if (!/^[0-9A-Za-z_\s+\-*/^().,eE]*$/.test(s)) throw new Error('Only numbers, Q, + - * / ^ ( ) , and math functions are allowed.');
+    const ids = s.match(/[A-Za-z_][A-Za-z_0-9]*/g) || [];
+    for (const id of ids) if (!ALLOWED.has(id) && !/^e$/i.test(id)) throw new Error(`Unknown name "${id}". Allowed: Q and ${[...ALLOWED].filter((v) => v !== 'Q').join(', ')}.`);
+    const js = s.replace(/\^/g, '**');
+    let f; try { f = new Function('Q', `"use strict";const {abs,sqrt,cbrt,exp,log,log10,pow,min,max,sin,cos,tan,atan,tanh,floor,ceil,round,sign,PI,E}=Math;const ln=Math.log;const pos=(x)=>Math.max(x,0);return (${js});`); } catch (e) { throw new Error('Could not read the formula. Check the parentheses and operators.'); }
+    const test = f(1.2345); if (typeof test !== 'number') throw new Error('Formula must return a number.');
+    return f;
+  }
+
+  // ---------- policy back-test on observed data ----------
+  function backtest(t, x, phi, rule, Fp, Fm, mode0) {
+    let mode = mode0, pay = 0, cost = 0, sw = 0; const path = [mode];
+    for (let i = 1; i < x.length; i++) {
+      const dt = t[i] - t[i - 1];
+      if (mode === 1) pay += phi(x[i - 1]) * dt;
+      const nm = rule(x[i], mode);
+      if (nm !== mode) { sw++; cost += nm === 1 ? Fp : Fm; mode = nm; }
+      path.push(mode);
+    }
+    return { pay, cost, net: pay - cost, switches: sw, path };
+  }
+
+  return { estimateOU, ouLogLik, solveSwitching, compileFormula, pchip, linear, backtest, logI, makeP, gaussHermiteProb };
+})();
+if (typeof module !== 'undefined') module.exports = OU;
+
+</script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const fmt = (v, d = 3) => (v === null || v === undefined || !isFinite(v)) ? '—' : Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(3) : (+v.toFixed(d)).toLocaleString(undefined, { maximumFractionDigits: d });
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const state = { dem: null, costTable: null, phiMode: 'formula', est: null, result: null };
+
+  // ---------- tabs & theme ----------
+  document.querySelectorAll('nav [data-tab]').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('nav [data-tab]').forEach((x) => x.setAttribute('aria-selected', x === b));
+    $('tab-app').classList.toggle('hidden', b.dataset.tab !== 'app');
+    $('tab-method').classList.toggle('hidden', b.dataset.tab !== 'method');
+    if (b.dataset.tab === 'method') renderMath();
+  }));
+  $('themeBtn').addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+    redraw();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
+  let mathDone = false;
+  function renderMath() {
+    if (mathDone || !window.renderMathInElement) return;
+    renderMathInElement($('tab-method'), { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '\\(', right: '\\)', display: false }], throwOnError: false });
+    mathDone = true;
+  }
+
+  // ---------- CSV ----------
+  function parseCSV(text) {
+    const rows = []; let row = [], f = '', q = false;
+    text = text.replace(/^﻿/, '');
+    const delim = (() => { const l = text.split(/\r?\n/)[0] || ''; const c = { ',': 0, ';': 0, '\t': 0 }; for (const ch of l) if (ch in c) c[ch]++; return Object.keys(c).sort((a, b) => c[b] - c[a])[0]; })();
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === delim) { row.push(f); f = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(f); f = ''; if (row.some((v) => v.trim() !== '')) rows.push(row); row = []; }
+      else f += ch;
+    }
+    row.push(f); if (row.some((v) => v.trim() !== '')) rows.push(row);
+    if (!rows.length) throw new Error('The file is empty.');
+    const isNum = (v) => v.trim() !== '' && isFinite(+v);
+    const header = rows[0].some((v) => !isNum(v)) ? rows.shift().map((h, i) => h.trim() || `col${i + 1}`) : rows[0].map((_, i) => `col${i + 1}`);
+    return { header, rows };
+  }
+  function numCol(tab, j) { return tab.rows.map((r) => { const v = (r[j] || '').trim(); return v === '' ? NaN : +v; }); }
+  function fillSelect(sel, opts, chosen) { sel.innerHTML = opts.map((o, i) => `<option value="${i}">${esc(o)}</option>`).join(''); if (chosen !== undefined) sel.value = chosen; }
+  const readFile = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(file); });
+
+  // ---------- demand ----------
+  $('demFile').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) loadDemandText(await readFile(f), f.name); });
+  $('demExample').addEventListener('click', () => loadDemandText(exampleDemandCSV(), 'example (simulated OU: m=40, μ=0.2/h, σ=7)'));
+  function exampleDemandCSV() {
+    let seed = 7; const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+    const gauss = () => { let u = 0, v = 0; while (u === 0) u = rnd(); v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    const mu = 0.2, m = 40, s = 7, dt = 0.25; let q = 32; const t0 = Date.UTC(2026, 0, 5, 0, 0);
+    const lines = ['timestamp,demand'];
+    for (let i = 0; i < 672; i++) {
+      const ts = new Date(t0 + i * dt * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+      lines.push(`${ts},${q.toFixed(3)}`);
+      const e = Math.exp(-mu * dt); q = m + (q - m) * e + s * Math.sqrt((1 - e * e) / (2 * mu)) * gauss();
+    }
+    return lines.join('\n');
+  }
+  function loadDemandText(text, name) {
+    try {
+      const tab = parseCSV(text); state.demTab = tab; state.demName = name;
+      const opts = ['(none: equally spaced)', ...tab.header];
+      // guess columns
+      let tGuess = 0, dGuess = -1;
+      tab.header.forEach((h, j) => { const lh = h.toLowerCase(); if (/time|date|stamp|period|hour|day|week|month|year|^t$/.test(lh) && !tGuess) tGuess = j + 1; });
+      if (!tGuess) tab.header.forEach((h, j) => { const v = tab.rows.slice(0, 20).map((r) => (r[j] || '').trim());
+        if (!tGuess && v.every((x) => x && !isFinite(+x) && isFinite(Date.parse(x.replace(' ', 'T'))))) tGuess = j + 1; });
+      tab.header.forEach((h, j) => { if (dGuess < 0 && j + 1 !== tGuess && numCol(tab, j).filter(isFinite).length > tab.rows.length * 0.8) dGuess = j; });
+      if (dGuess < 0) dGuess = tab.header.length - 1;
+      fillSelect($('timeCol'), opts, tGuess); fillSelect($('demCol'), tab.header, dGuess);
+      $('demCols').classList.remove('hidden');
+      updateDemand();
+    } catch (err) { $('demSummary').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  }
+  ['timeCol', 'demCol', 'timeUnit', 'dtIn'].forEach((id) => $(id).addEventListener('change', updateDemand));
+  function updateDemand() {
+    const tab = state.demTab; if (!tab) return;
+    const tj = +$('timeCol').value - 1, dj = +$('demCol').value;
+    const q = numCol(tab, dj); let t = [], kind = 'index';
+    if (tj >= 0) {
+      const raw = tab.rows.map((r) => (r[tj] || '').trim());
+      if (raw.every((v) => v !== '' && isFinite(+v))) { t = raw.map(Number); kind = 'numeric'; }
+      else {
+        const ms = raw.map((v) => Date.parse(/^\d{4}-\d\d-\d\d \d/.test(v) ? v.replace(' ', 'T') : v));
+        if (ms.filter(isFinite).length < raw.length * 0.9) { $('demSummary').innerHTML = '<div class="msg err">Could not read the time column as numbers or dates.</div>'; return; }
+        const unitH = +$('timeUnit').value; t = ms.map((v) => v / 3600e3 / unitH); kind = 'date';
+      }
+    } else { const dt = +$('dtIn').value || 1; t = q.map((_, i) => i * dt); }
+    $('unitWrap').classList.toggle('hidden', kind !== 'date');
+    $('dtWrap').classList.toggle('hidden', tj >= 0);
+    $('unitNote').textContent = kind === 'numeric' ? 'Time values are used as they are: μ, σ and ρ are per unit of this column.' : kind === 'date' ? '' : 'μ, σ and ρ are per the time unit you use for the spacing.';
+    // clean
+    const T = [], Q = []; let dropped = 0;
+    const idx = t.map((_, i) => i).filter((i) => isFinite(t[i]) && isFinite(q[i])).sort((a, b) => t[a] - t[b]);
+    dropped = q.length - idx.length;
+    for (const i of idx) { if (T.length && t[i] <= T[T.length - 1]) { dropped++; continue; } T.push(t[i]); Q.push(q[i]); }
+    const t0 = T[0]; state.dem = { t: T.map((v) => v - t0), q: Q, kind, t0, unitLabel: kind === 'date' ? $('timeUnit').selectedOptions[0].text : 'time units' };
+    const mean = Q.reduce((a, b) => a + b, 0) / Q.length;
+    $('demSummary').innerHTML = `<div class="msg">${esc(state.demName)} · <b>${Q.length}</b> observations over ${fmt(T[T.length - 1] - T[0], 2)} ${esc(state.dem.unitLabel)} · min ${fmt(Math.min(...Q), 2)} · mean ${fmt(mean, 2)} · max ${fmt(Math.max(...Q), 2)}${dropped ? ` · ${dropped} rows skipped (missing or duplicate times)` : ''}</div>`;
+    drawSmallDemand();
+    estimate();
+  }
+  function estimate() {
+    const d = state.dem; if (!d) return;
+    try {
+      const e = OU.estimateOU(d.t, d.q); state.est = e;
+      const ci = (v, s) => isFinite(s) ? `${fmt(v - 1.96 * s)} to ${fmt(v + 1.96 * s)}` : '—';
+      $('estTable').innerHTML = `<table><thead><tr><th>Parameter</th><th class="num">Estimate</th><th class="num">Std. error</th><th class="num">95% CI</th></tr></thead><tbody>
+        <tr><td>μ, reversion speed</td><td class="num">${fmt(e.mu, 4)}</td><td class="num">${fmt(e.se[0], 4)}</td><td class="num">${ci(e.mu, e.se[0])}</td></tr>
+        <tr><td>m, long-run mean</td><td class="num">${fmt(e.m, 3)}</td><td class="num">${fmt(e.se[1], 3)}</td><td class="num">${ci(e.m, e.se[1])}</td></tr>
+        <tr><td>σ, volatility</td><td class="num">${fmt(e.sigma, 3)}</td><td class="num">${fmt(e.se[2], 3)}</td><td class="num">${ci(e.sigma, e.se[2])}</td></tr></tbody></table>
+        <p class="small muted" style="margin:6px 0 0">Half-life ln2/μ = ${fmt(e.halfLife, 3)} ${esc(d.unitLabel)} · long-run SD σ/√(2μ) = ${fmt(e.sinf, 3)} · ${e.regular ? `regular spacing Δt = ${fmt(e.dt, 4)}` : 'irregular spacing (exact likelihood)'} · log-likelihood ${fmt(e.loglik, 2)}</p>`;
+      $('pMu').value = +e.mu.toPrecision(6); $('pM').value = +e.m.toPrecision(6); $('pSig').value = +e.sigma.toPrecision(6);
+      $('estWarn').innerHTML = e.warnings.map((w) => `<div class="msg warn">${esc(w)}</div>`).join('');
+      drawSmallPhi();
+    } catch (err) { $('estTable').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  }
+
+  // ---------- payoff ----------
+  function setPhiMode(mode) {
+    state.phiMode = mode; $('phiModeF').setAttribute('aria-pressed', mode === 'formula'); $('phiModeC').setAttribute('aria-pressed', mode === 'table');
+    $('phiFormulaBox').classList.toggle('hidden', mode !== 'formula'); $('phiCostBox').classList.toggle('hidden', mode !== 'table'); drawSmallPhi();
+  }
+  $('phiModeF').addEventListener('click', () => setPhiMode('formula'));
+  $('phiModeC').addEventListener('click', () => setPhiMode('table'));
+  ['phiF', 'clip0', 'cQ', 'c0', 'c1', 'interp', 'pMu', 'pM', 'pSig'].forEach((id) => $(id).addEventListener('input', drawSmallPhi));
+  ['name0', 'name1'].forEach((id) => $(id).addEventListener('input', syncNames));
+  function syncNames() { const n0 = $('name0').value || 'Mode 0', n1 = $('name1').value || 'Mode 1';
+    for (const s of [$('mode0'), $('modeNow')]) { s.options[0].text = `Mode 0: ${n0}`; s.options[1].text = `Mode 1: ${n1}`; } }
+  syncNames();
+  $('costFile').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) loadCostText(await readFile(f)); });
+  $('costExample').addEventListener('click', () => {
+    const lines = ['demand,cost_flexible,cost_fixed'];
+    for (let q = 0; q <= 100; q += 5) lines.push(`${q},${(150 + 45 * Math.pow(q, 0.95)).toFixed(2)},${(820 + 25 * q).toFixed(2)}`);
+    loadCostText(lines.join('\n'));
+  });
+  function loadCostText(text) {
+    try { const tab = parseCSV(text); state.costTab = tab; const h = tab.header;
+      fillSelect($('cQ'), h, 0); fillSelect($('c0'), h, Math.min(1, h.length - 1)); fillSelect($('c1'), h, Math.min(2, h.length - 1));
+      $('costCols').classList.remove('hidden'); drawSmallPhi();
+    } catch (err) { $('phiMsg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  }
+  function getPhi() {
+    let f;
+    if (state.phiMode === 'formula') f = OU.compileFormula($('phiF').value);
+    else {
+      const tab = state.costTab; if (!tab) throw new Error('Load a cost table first.');
+      const xq = numCol(tab, +$('cQ').value), y0 = numCol(tab, +$('c0').value), y1 = numCol(tab, +$('c1').value);
+      const pts = xq.map((x, i) => [x, y0[i] - y1[i]]).filter((p) => isFinite(p[0]) && isFinite(p[1])).sort((a, b) => a[0] - b[0]);
+      const xs = [], ys = []; for (const p of pts) { if (xs.length && p[0] === xs[xs.length - 1]) continue; xs.push(p[0]); ys.push(p[1]); }
+      if (xs.length < 2) throw new Error('The cost table needs at least two distinct demand levels.');
+      f = $('interp').value === 'linear' ? OU.linear(xs, ys) : OU.pchip(xs, ys); f.range = [xs[0], xs[xs.length - 1]];
+    }
+    const g = $('clip0').checked ? (q) => f(Math.max(q, 0)) : f; g.range = f.range; return g;
+  }
+  function params() { const p = { mu: +$('pMu').value, m: +$('pM').value, sigma: +$('pSig').value, rho: +$('rho').value };
+    if (!(p.mu > 0) || !(p.sigma > 0) || !isFinite(p.m)) throw new Error('Set μ > 0, σ > 0 and m (load demand data or type them in).');
+    if (!(p.rho > 0)) throw new Error('The discount rate ρ must be positive.'); return p; }
+
+  // ---------- run ----------
+  $('runBtn').addEventListener('click', () => { $('runMsg').textContent = 'Computing…'; setTimeout(run, 20); });
+  function run() {
+    try {
+      const par = params(), phi = getPhi(), Fp = +$('Fp').value, Fm = +$('Fm').value;
+      if (!(Fp >= 0 && Fm >= 0)) throw new Error('Switching costs must be zero or positive.');
+      const t0 = performance.now();
+      const r = OU.solveSwitching(par, phi, Fp, Fm);
+      if (!r.ok) throw new Error((r.notes || []).join(' ') || 'The solver did not converge.');
+      r.par = par; r.Fp = Fp; r.Fm = Fm; r.phi = phi; state.result = r;
+      $('runMsg').textContent = `Done in ${Math.round(performance.now() - t0)} ms.`;
+      showResults();
+    } catch (err) { $('runMsg').innerHTML = `<span style="color:var(--bad)">${esc(err.message)}</span>`; }
+  }
+  function names() { return [$('name0').value || 'Mode 0', $('name1').value || 'Mode 1']; }
+
+  function policyRule(r) {
+    // returns next mode given demand and current mode (works for both orientations)
+    if (r.noSwitch) return () => r.alwaysMode;
+    const up = !r.flip;   // mode 1 is the high-demand mode
+    return (q, mode) => {
+      if (mode === 0) { if (isFinite(r.enter1) && (up ? q >= r.enter1 : q <= r.enter1)) return 1; return 0; }
+      if (isFinite(r.exit1) && (up ? q <= r.exit1 : q >= r.exit1)) return 0; return 1;
+    };
+  }
+  function showResults() {
+    const r = state.result, [n0, n1] = names(), par = r.par;
+    $('results').classList.remove('hidden');
+    const dirIn = r.flip ? 'falls below' : 'rises above', dirOut = r.flip ? 'rises above' : 'falls below';
+    if (r.noSwitch) {
+      $('kpis').innerHTML = `<div class="kpi"><div class="v">${esc(r.alwaysMode ? n1 : n0)}</div><div class="l">is better at every plausible demand level</div></div>`;
+    } else {
+      $('kpis').innerHTML = `
+        <div class="kpi"><div class="v">${fmt(r.enter1, 2)}</div><div class="l"><span class="sw" style="background:var(--s1)"></span>Switch to ${esc(n1)} when demand ${dirIn} this</div></div>
+        <div class="kpi"><div class="v">${fmt(r.exit1, 2)}</div><div class="l"><span class="sw" style="background:var(--s0)"></span>Switch back to ${esc(n0)} when demand ${dirOut} this</div></div>
+        <div class="kpi"><div class="v">${fmt(r.Qhat, 2)}</div><div class="l">Break-even demand Φ(Q) = 0 (the threshold if switching were free)</div></div>
+        <div class="kpi"><div class="v">${isFinite(r.enter1) && isFinite(r.exit1) ? fmt(Math.abs(r.enter1 - r.exit1), 2) : '—'}</div><div class="l">Width of the no-switching band (hysteresis)</div></div>`;
+    }
+    // recommendation
+    const d = state.dem, rule = policyRule(r), cur = +$('modeNow').value;
+    if (d) {
+      const qn = d.q[d.q.length - 1], nm = rule(qn, cur);
+      $('rec').innerHTML = nm === cur ? `Latest demand is <b>${fmt(qn, 2)}</b> and you are in <b>${esc([n0, n1][cur])}</b>: <b>stay</b> in ${esc([n0, n1][cur])}.`
+        : `Latest demand is <b>${fmt(qn, 2)}</b> and you are in <b>${esc([n0, n1][cur])}</b>: <b>switch to ${esc([n0, n1][nm])}</b> (cost ${fmt(nm === 1 ? r.Fp : r.Fm, 2)}).`;
+    } else $('rec').textContent = 'Load demand data to get a recommendation for the latest observation.';
+    const extra = [];
+    if (r.phi.range && !r.noSwitch) { const lo = par.m - 3 * r.sinf, hi = par.m + 3 * r.sinf;
+      if (lo < r.phi.range[0] || hi > r.phi.range[1]) extra.push(`The cost table covers demand ${fmt(r.phi.range[0], 2)}–${fmt(r.phi.range[1], 2)}, but demand is often outside that range (mean ± 3 SD is ${fmt(lo, 1)}–${fmt(hi, 1)}). Φ is extrapolated linearly there, which affects the thresholds.`); }
+    $('notes').innerHTML = (r.notes || []).concat(extra).map((n) => `<div class="msg">${esc(n)}</div>`).join('');
+    // checks
+    if (r.checks) {
+      const c = r.checks;
+      $('checks').innerHTML = r.noSwitch ? '<div class="msg">No thresholds to check.</div>' : `<table><tbody>
+        <tr><td>Value matching residuals at both thresholds</td><td class="num">${fmt(c.vm[0])}, ${fmt(c.vm[1])}</td></tr>
+        <tr><td>Largest gain from switching early, ${esc(n0)} → ${esc(n1)} / ${esc(n1)} → ${esc(n0)} (should be 0)</td><td class="num">${fmt(c.enterGap || 0)}, ${fmt(c.exitGap || 0)}</td></tr>
+        <tr><td>HJB inequality in the switching regions (Φ ≥ ρF⁺ where you enter, Φ ≤ −ρF⁻ where you leave)</td><td class="num">${c.pass ? 'holds' : 'violated'}</td></tr>
+        <tr><td><b>All optimality conditions</b></td><td class="num" style="color:var(--${c.pass ? 'good' : 'bad'})"><b>${c.pass ? 'pass' : 'fail'}</b></td></tr></tbody></table>`;
+    }
+    // backtest
+    if (d) {
+      const m0 = +$('mode0').value, phi = r.phi;
+      const pol = OU.backtest(d.t, d.q, phi, rule, r.Fp, r.Fm, m0);
+      const myo = OU.backtest(d.t, d.q, phi, (q) => (phi(q) > 0 ? 1 : 0), r.Fp, r.Fm, m0);
+      const all0 = OU.backtest(d.t, d.q, phi, () => 0, r.Fp, r.Fm, m0), all1 = OU.backtest(d.t, d.q, phi, () => 1, r.Fp, r.Fm, m0);
+      state.bt = pol;
+      const rows = [['Optimal thresholds (this app)', pol], ['Myopic: switch whenever Φ changes sign', myo], [`Always ${n0}`, all0], [`Always ${n1}`, all1]];
+      const best = Math.max(...rows.map((x) => x[1].net));
+      $('btTable').innerHTML = `<thead><tr><th>Policy</th><th class="num">Switches</th><th class="num">Payoff from ${esc(n1)}</th><th class="num">Switching costs</th><th class="num">Net</th></tr></thead><tbody>` +
+        rows.map(([lab, b]) => `<tr><td>${esc(lab)}</td><td class="num">${b.switches}</td><td class="num">${fmt(b.pay, 1)}</td><td class="num">${fmt(b.cost, 1)}</td><td class="num"${b.net === best ? ' style="font-weight:650"' : ''}>${fmt(b.net, 1)}</td></tr>`).join('') + '</tbody>';
+    } else $('btTable').innerHTML = '';
+    redraw();
+    $('mcTable').innerHTML = '<tbody><tr><td class="muted">Simulating…</td></tr></tbody>';
+    setTimeout(() => simulate(r, rule), 30);
+  }
+  function simulate(r, rule) {
+    const [n0, n1] = names(), par = r.par, phi = r.phi, d = state.dem;
+    // decisions at the data spacing; horizon is 8/ρ or 4,000 decision steps, whichever is shorter
+    const dt = d ? d.t[d.t.length - 1] / (d.t.length - 1) : Math.min(8 / par.rho, 60 / par.mu) / 1000;
+    const T = Math.min(8 / par.rho, 4000 * dt);
+    const steps = Math.ceil(T / dt), Npath = 400, e = Math.exp(-par.mu * dt), sd = par.sigma * Math.sqrt((1 - e * e) / (2 * par.mu));
+    let seed = 12345; const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return (seed + 0.5) / 4294967296; };
+    const g = () => Math.sqrt(-2 * Math.log(rnd())) * Math.cos(2 * Math.PI * rnd());
+    const pols = [['Optimal thresholds (this app)', rule], ['Myopic: switch whenever Φ changes sign', (q) => (phi(q) > 0 ? 1 : 0)], [`Always ${n0}`, () => 0], [`Always ${n1}`, () => 1]];
+    const acc = pols.map(() => ({ v: 0, v2: 0, sw: 0, d: 0, d2: 0 })), m0 = +$('mode0').value, disc = Math.exp(-par.rho * dt);
+    const q = new Float64Array(steps + 1);
+    for (let k = 0; k < Npath; k++) {
+      q[0] = par.m + r.sinf * g(); for (let i = 0; i < steps; i++) q[i + 1] = par.m + (q[i] - par.m) * e + sd * g();
+      const vals = pols.map(([, f]) => { let md = m0, v = 0, w = 1, sw = 0;
+        for (let i = 0; i < steps; i++) { const nm = f(q[i], md); if (nm !== md) { v -= w * (nm ? r.Fp : r.Fm); md = nm; sw++; } if (md) v += w * phi(q[i]) * dt; w *= disc; }
+        return [v, sw]; });
+      vals.forEach(([v, sw], j) => { const dd = vals[0][0] - v; acc[j].v += v; acc[j].v2 += v * v; acc[j].sw += sw; acc[j].d += dd; acc[j].d2 += dd * dd; });
+    }
+    const res = acc.map((a) => { const mean = a.v / Npath, sdv = Math.sqrt(Math.max(a.v2 / Npath - mean * mean, 0)), dm = a.d / Npath, dsd = Math.sqrt(Math.max(a.d2 / Npath - dm * dm, 0));
+      return { mean, se: sdv / Math.sqrt(Npath), sw: a.sw / Npath, dm, dse: dsd / Math.sqrt(Npath) }; });
+    const best = Math.max(...res.map((x) => x.mean));
+    $('mcTable').innerHTML = '<thead><tr><th>Policy</th><th class="num">Switches per path</th><th class="num">Expected discounted net payoff</th><th class="num">± std. error</th><th class="num">Optimal minus this policy (paired)</th></tr></thead><tbody>' +
+      pols.map(([lab], j) => `<tr><td>${esc(lab)}</td><td class="num">${fmt(res[j].sw, 1)}</td><td class="num"${res[j].mean === best ? ' style="font-weight:650"' : ''}>${fmt(res[j].mean, 1)}</td><td class="num">${fmt(res[j].se, 1)}</td><td class="num">${j === 0 ? '—' : `${fmt(res[j].dm, 1)} ± ${fmt(res[j].dse, 1)}`}</td></tr>`).join('') + '</tbody>';
+    $('mcNote').textContent = `${Npath} simulated paths of the fitted OU process, starting from its long-run distribution in the selected starting mode, horizon ${fmt(T, 1)} time units (8/ρ or 4,000 decisions, whichever is shorter), decisions every ${fmt(dt, 3)} time units (the spacing of your data), discounted at ρ. The same random paths are used for every policy. With more frequent decisions, the myopic rule switches more often and does worse.`;
+  }
+
+  // ---------- downloads ----------
+  function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+  $('dlJson').addEventListener('click', () => { const r = state.result; if (!r) return; const [n0, n1] = names();
+    download('ou_switching_results.json', JSON.stringify({ modes: { 0: n0, 1: n1 }, ou: r.par, estimate: state.est && { mu: state.est.mu, m: state.est.m, sigma: state.est.sigma, se: state.est.se, n: state.est.n },
+      payoff: state.phiMode === 'formula' ? { formula: $('phiF').value, clipAtZero: $('clip0').checked } : { costTable: true, interpolation: $('interp').value },
+      switchingCost: { to1: r.Fp, to0: r.Fm }, thresholds: { switchTo1: r.enter1, switchTo0: r.exit1, breakEven: r.Qhat, mode1IsHighDemandMode: !r.flip, neverSwitch: !!r.noSwitch }, notes: r.notes, checks: r.checks }, null, 2), 'application/json'); });
+  $('dlPolicy').addEventListener('click', () => { const d = state.dem, b = state.bt; if (!d || !b) return; const [n0, n1] = names();
+    download('ou_switching_policy.csv', ['time,demand,mode,mode_name'].concat(d.t.map((t, i) => `${+(t + d.t0).toPrecision(12)},${d.q[i]},${b.path[i]},"${(b.path[i] ? n1 : n0).replace(/"/g, '""')}"`)).join('\n'), 'text/csv'); });
+
+  // ---------- charts (dependency-free SVG) ----------
+  function niceTicks(lo, hi, n = 5) {
+    if (!(hi > lo)) { hi = lo + 1; }
+    const span = hi - lo, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), err = step0 / mag;
+    const step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag;
+    const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9 * span; v += step) out.push(+v.toPrecision(12)); return out;
+  }
+  function chart(el, cfg) {
+    const W = 640, H = cfg.h || 300, L = 58, R = 14, T = 12, B = 38;
+    const series = cfg.series.filter((s) => s.x.length);
+    let xmin = cfg.xmin ?? Math.min(...series.map((s) => Math.min(...s.x))), xmax = cfg.xmax ?? Math.max(...series.map((s) => Math.max(...s.x)));
+    let ys = series.flatMap((s) => s.y.filter(isFinite)); (cfg.hlines || []).forEach((h) => ys.push(h.y));
+    let ymin = cfg.ymin ?? Math.min(...ys), ymax = cfg.ymax ?? Math.max(...ys); const pad = (ymax - ymin) * 0.06 || 1; if (cfg.ymin === undefined) ymin -= pad; if (cfg.ymax === undefined) ymax += pad;
+    const X = (v) => L + (v - xmin) / (xmax - xmin) * (W - L - R), Y = (v) => T + (ymax - v) / (ymax - ymin) * (H - T - B);
+    const ink2 = css('--ink2'), grid = css('--grid'), muted = css('--muted');
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(cfg.label || '')}">`;
+    (cfg.bands || []).forEach((b) => { const x0 = Math.max(X(b.x0), L), x1 = Math.min(X(b.x1), W - R); if (x1 > x0) s += `<rect x="${x0}" y="${T}" width="${x1 - x0}" height="${H - T - B}" fill="${b.color}"/>`; });
+    const yt = niceTicks(ymin, ymax, 5), xt = niceTicks(xmin, xmax, 6);
+    const tf = (ticks) => { const st = ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : 1, dec = Math.max(0, Math.min(6, -Math.floor(Math.log10(st) + 1e-9)));
+      return (v) => (Math.abs(v) >= 1e5 ? v.toExponential(1) : v.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec })); };
+    const yf = tf(yt), xf = tf(xt);
+    yt.forEach((v) => { s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${grid}"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="${ink2}">${yf(v)}</text>`; });
+    xt.forEach((v) => { s += `<text x="${X(v)}" y="${H - B + 16}" text-anchor="middle" font-size="11" fill="${ink2}">${xf(v)}</text>`; });
+    s += `<line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="${muted}"/>`;
+    if (cfg.xlab) s += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle" font-size="11.5" fill="${ink2}">${esc(cfg.xlab)}</text>`;
+    if (cfg.ylab) s += `<text transform="translate(13 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle" font-size="11.5" fill="${ink2}">${esc(cfg.ylab)}</text>`;
+    s += `<clipPath id="cp-${el.id}"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath><g clip-path="url(#cp-${el.id})">`;
+    (cfg.hlines || []).forEach((h) => { s += `<line x1="${L}" x2="${W - R}" y1="${Y(h.y)}" y2="${Y(h.y)}" stroke="${h.color}" stroke-width="1.5" stroke-dasharray="${h.dash || '5 4'}"/>`; });
+    (cfg.vlines || []).forEach((h) => { if (isFinite(h.x)) s += `<line x1="${X(h.x)}" x2="${X(h.x)}" y1="${T}" y2="${H - B}" stroke="${h.color}" stroke-width="1.5" stroke-dasharray="${h.dash || '5 4'}"/>`; });
+    series.forEach((se) => { let d = '', pen = false; se.x.forEach((x, i) => { const y = se.y[i]; if (!isFinite(y)) { pen = false; return; } d += `${pen ? 'L' : 'M'}${X(x).toFixed(1)},${Y(y).toFixed(1)}`; pen = true; });
+      s += `<path d="${d}" fill="none" stroke="${se.color}" stroke-width="${se.w || 2}" ${se.dash ? `stroke-dasharray="${se.dash}"` : ''} stroke-linejoin="round" stroke-linecap="round"/>`; });
+    (cfg.points || []).forEach((p) => { if (isFinite(p.x) && isFinite(p.y)) s += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="5" fill="${p.color}" stroke="${css('--surface')}" stroke-width="2"/>`; });
+    s += `</g><line class="xh" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="${muted}" visibility="hidden"/></svg><div class="tip"></div>`;
+    el.innerHTML = s;
+    const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), xh = svg.querySelector('.xh');
+    svg.addEventListener('mousemove', (ev) => {
+      const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W; if (px < L || px > W - R) { tip.style.display = 'none'; xh.setAttribute('visibility', 'hidden'); return; }
+      const xv = xmin + (px - L) / (W - L - R) * (xmax - xmin);
+      const lines = series.filter((se) => se.name).map((se) => { let bi = 0, bd = Infinity; for (let i = 0; i < se.x.length; i++) { const dd = Math.abs(se.x[i] - xv); if (dd < bd) { bd = dd; bi = i; } }
+        return `<span class="sw" style="background:${se.color}"></span>${esc(se.name)}: <b>${fmt(se.y[bi], 3)}</b>`; });
+      tip.innerHTML = `${esc(cfg.xlab || 'x')}: <b>${fmt(xv, 3)}</b><br>${lines.join('<br>')}`;
+      tip.style.display = 'block'; const left = (px / W) * r.width; tip.style.left = Math.min(left + 12, r.width - tip.offsetWidth - 4) + 'px'; tip.style.top = '8px';
+      xh.setAttribute('x1', px); xh.setAttribute('x2', px); xh.setAttribute('visibility', 'visible');
+    });
+    svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; xh.setAttribute('visibility', 'hidden'); });
+  }
+  const legend = (el, items) => { el.innerHTML = items.map((i) => i.box ? `<span><span class="sw" style="background:${i.color}"></span>${esc(i.name)}</span>` : `<span><i style="border-top-color:${i.color};${i.dash ? 'border-top-style:dashed' : ''}"></i>${esc(i.name)}</span>`).join(''); };
+  const linspace = (a, b, n) => Array.from({ length: n }, (_, i) => a + (b - a) * i / (n - 1));
+
+  function drawSmallDemand() { const d = state.dem; if (!d) return; chart($('chDemSmall'), { h: 190, series: [{ x: d.t, y: d.q, color: css('--s0'), name: 'Demand', w: 1.4 }], xlab: `time (${d.unitLabel})`, ylab: 'demand', label: 'Demand over time' }); }
+  function drawSmallPhi() {
+    $('phiMsg').innerHTML = '';
+    let phi; try { phi = getPhi(); } catch (err) { $('chPhiSmall').innerHTML = ''; if (state.phiMode === 'formula' || state.costTab) $('phiMsg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; return; }
+    let lo = 0, hi = 100; const m = +$('pM').value, mu = +$('pMu').value, sg = +$('pSig').value;
+    if (mu > 0 && sg > 0 && isFinite(m)) { const s = sg / Math.sqrt(2 * mu); lo = m - 4 * s; hi = m + 4 * s; } else if (phi.range) [lo, hi] = phi.range;
+    const xs = linspace(lo, hi, 300), ys = xs.map(phi);
+    if (ys.some((v) => !isFinite(v))) $('phiMsg').innerHTML = '<div class="msg warn">Φ is not finite at some demand levels in the plotted range (for example sqrt or log of a negative number). Keep "Evaluate Φ at max(Q, 0)" on, or use pos(Q).</div>';
+    chart($('chPhiSmall'), { h: 170, series: [{ x: xs, y: ys, color: css('--s2'), name: 'Φ(Q)' }], hlines: [{ y: 0, color: css('--muted'), dash: '3 3' }], xlab: 'demand Q', ylab: 'Φ(Q)', label: 'Payoff function' });
+  }
+  function redraw() {
+    drawSmallDemand(); drawSmallPhi();
+    const r = state.result; if (!r || $('results').classList.contains('hidden')) return;
+    const [n0, n1] = names(), par = r.par, sinf = r.sinf, c0 = css('--s0'), c1 = css('--s1'), cg = css('--muted');
+    const th = [];
+    if (!r.noSwitch) { if (isFinite(r.enter1)) th.push({ y: r.enter1, x: r.enter1, color: c1, name: `Switch to ${n1}` }); if (isFinite(r.exit1)) th.push({ y: r.exit1, x: r.exit1, color: c0, name: `Switch to ${n0}` }); }
+    // demand chart with policy bands
+    const d = state.dem;
+    if (d && state.bt) {
+      const bands = []; let s0 = 0; const p = state.bt.path;
+      for (let i = 1; i <= p.length; i++) if (i === p.length || p[i] !== p[s0]) { bands.push({ x0: d.t[s0], x1: d.t[Math.min(i, p.length - 1)], color: p[s0] ? css('--tint1') : css('--tint0') }); s0 = i; }
+      chart($('chDem'), { series: [{ x: d.t, y: d.q, color: css('--ink2'), name: 'Demand', w: 1.3 }], hlines: th.map((h) => ({ y: h.y, color: h.color })), bands, xlab: `time (${d.unitLabel})`, ylab: 'demand', label: 'Demand with policy' });
+      legend($('lgDem'), [{ name: 'Demand', color: css('--ink2') }, ...th.map((h) => ({ name: `${h.name} (${fmt(h.y, 2)})`, color: h.color, dash: true })), { name: `In ${n0}`, color: css('--tint0'), box: true }, { name: `In ${n1}`, color: css('--tint1'), box: true }]);
+    } else { $('chDem').innerHTML = '<p class="small muted">Load demand data to see the policy applied to it.</p>'; $('lgDem').innerHTML = ''; }
+    const xs = linspace(par.m - 4 * sinf, par.m + 4 * sinf, 240);
+    chart($('chPhi'), { series: [{ x: xs, y: xs.map(r.phi), color: css('--s2'), name: 'Φ(Q)' }], hlines: [{ y: 0, color: cg, dash: '3 3' }], vlines: th.map((h) => ({ x: h.x, color: h.color })).concat([{ x: r.Qhat, color: cg, dash: '2 3' }]), xlab: 'demand Q', ylab: 'Φ(Q) per time unit', label: 'Payoff' });
+    legend($('lgPhi'), [{ name: 'Φ(Q)', color: css('--s2') }, ...th.map((h) => ({ name: h.name, color: h.color, dash: true })), { name: 'Break-even', color: cg, dash: true }]);
+    if (!r.noSwitch && r.D) {
+      const dV = r.D;
+      chart($('chV'), { series: [{ x: xs, y: xs.map(dV), color: css('--s3'), name: 'V1 − V0' }],
+        hlines: [{ y: r.Fp, color: c1 }, { y: -r.Fm, color: c0 }], vlines: th.map((h) => ({ x: h.x, color: h.color, dash: '2 3' })),
+        points: th.map((h) => ({ x: h.x, y: dV(h.x), color: h.color })), xlab: 'demand Q', ylab: 'V1 − V0', label: 'Value difference' });
+      legend($('lgV'), [{ name: `V1 − V0: value of being in ${n1} instead of ${n0}`, color: css('--s3') },
+        { name: `+F⁺ = ${fmt(r.Fp, 2)}: worth paying to switch to ${n1}`, color: c1, dash: true }, { name: `−F⁻ = −${fmt(r.Fm, 2)}: worth paying to switch to ${n0}`, color: c0, dash: true }]);
+    } else { $('chV').innerHTML = ''; $('lgV').innerHTML = ''; }
+    const dens = xs.map((q) => Math.exp(-0.5 * ((q - par.m) / sinf) ** 2) / (sinf * Math.sqrt(2 * Math.PI)));
+    const Phi = (z) => 0.5 * (1 + erf(z / Math.SQRT2));
+    chart($('chDens'), { series: [{ x: xs, y: dens, color: css('--s3'), name: 'density' }], vlines: th.map((h) => ({ x: h.x, color: h.color })), ymin: 0, xlab: 'demand Q', ylab: 'long-run density', label: 'Stationary density' });
+    const items = [{ name: `N(m, σ²/2μ): mean ${fmt(par.m, 2)}, SD ${fmt(sinf, 2)}`, color: css('--s3') }];
+    th.forEach((h) => { const p = Phi((h.x - par.m) / sinf), toward1 = h.color === c1, above = toward1 ? !r.flip : r.flip;
+      items.push({ name: `${h.name} (${fmt(h.x, 2)}): demand is ${above ? 'above' : 'below'} it ${fmt(100 * (above ? 1 - p : p), 1)}% of the time`, color: h.color, dash: true }); });
+    legend($('lgD'), items);
+  }
+  function erf(x) { const t = 1 / (1 + 0.5 * Math.abs(x)), y = 1 - t * Math.exp(-x * x - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628288 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277))))))))); return x >= 0 ? y : -y; }
+  window.addEventListener('resize', () => {});
+  drawSmallPhi();
+})();
+</script>
+</body>
+</html>
